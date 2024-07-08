@@ -12,7 +12,7 @@ def get_command_line_parser():
     # about dataset and network
     parser.add_argument('-project', type=str, default=PROJECT)
     parser.add_argument('-dataset', type=str, default='cub200',
-                        choices=['mini_imagenet', 'cub200', 'cifar100'])
+                        choices=['mini_imagenet', 'cub200', 'cifar100', 'swat'])
     parser.add_argument('-dataroot', type=str, default=DATA_DIR)
 
     # about pre-training

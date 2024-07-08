@@ -91,53 +91,57 @@ class FSCILTrainer(Trainer):
                 tsl, tsa = test(self.model, base_testloader, epoch, args, 0, is_base=True)
             else:
                 tsl, tsa, ind_va, cmb_va = test(self.model, base_testloader, epoch, args, 0, is_base=True)
-            
-            ##### test model with all sessions #####
-            self.model = replace_base_fc(base_train_set, base_testloader.dataset.transform, self.model, args)
-                       
-            self.model.mode = self.args.new_mode
-            for k in range(1, args.sessions):
-                session_train_set, session_trainloader, session_testloader = self.get_dataloader(k)
-                self.model.update_fc(session_trainloader, np.unique(session_train_set.targets), k)
-            
-            # here session_testloader is the last session's testloader
-            return_list = test_all_sessions(self.model, session_testloader, 0, args, args.sessions)
 
-            if args.in_domain_feat_cls_weight == 0.0:
-                vls, vas = return_list
-                key_acc = vas[-2]
-            else:
-                vls, vas, ind_vas, cmb_vas = return_list
-                key_acc = cmb_vas[-2]
-            
-            log_str = 'epoch: %d'%epoch
-            log_str += ', base acc: {:.4f}'.format(tsa)
-            if args.in_domain_feat_cls_weight != 0.0:
-                log_str += '| ind: {:.4f}| cmb: {:.4f}'.format(ind_va, cmb_va)
+            if epoch % 30 == 0 or epoch == args.epochs_base - 1:
+                ##### test model with all sessions #####
+                self.model = replace_base_fc(base_train_set, base_testloader.dataset.transform, self.model, args)
 
-            log_str += ', novel acc: {:.4f}'.format(vas[-1])
-            if args.in_domain_feat_cls_weight != 0.0:
-                log_str += '| ind: {:.4f}| cmb: {:.4f}'.format(ind_vas[-1], cmb_vas[-1])
-            
-            log_str += ', sess acc: %s'%str(np.around(vas[:-1], 4))
-            if args.in_domain_feat_cls_weight != 0.0:
-                log_str += '| ind: %s| cmb: %s'%(str(np.around(ind_vas[:-1], 4)), str(np.around(cmb_vas[:-1], 4)))
+                self.model.mode = self.args.new_mode
+                for k in range(1, args.sessions):
+                    session_train_set, session_trainloader, session_testloader = self.get_dataloader(k)
+                    self.model.update_fc(session_trainloader, np.unique(session_train_set.targets), k)
 
-            if key_acc > max_acc:
-                max_acc = key_acc
-                self.best_model_dict = deepcopy(self.model.state_dict())
-                save_model_dir = os.path.join(args.save_path, 'max_acc.pth')
-                torch.save(dict(params=self.model.state_dict()), save_model_dir)
+                # here session_testloader is the last session's testloader
+                return_list = test_all_sessions(self.model, session_testloader, 0, args, args.sessions)
 
-            log_str += ', max acc: {:.4f}'.format(max_acc)
+                if epoch == args.epochs_base - 1:
+                    embedding_list, label_list = get_features(session_testloader, session_testloader.dataset.transform, self.model)
+                    save_s_tne(embedding_list.numpy(), label_list.numpy())
 
-            log(self.out_log, log_str)
-            #log(self.out_log, str([epoch, np.around(tsa, 3), np.around(vas[-1], 3), np.around(vas[:-1], 3)]))
+                if args.in_domain_feat_cls_weight == 0.0:
+                    vls, vas = return_list
+                    key_acc = vas[-2]
+                else:
+                    vls, vas, ind_vas, cmb_vas = return_list
+                    key_acc = cmb_vas[-2]
+
+                log_str = 'epoch: %d' % epoch
+                log_str += ', base acc: {:.4f}'.format(tsa)
+                if args.in_domain_feat_cls_weight != 0.0:
+                    log_str += '| ind: {:.4f}| cmb: {:.4f}'.format(ind_va, cmb_va)
+
+                log_str += ', novel acc: {:.4f}'.format(vas[-1])
+                if args.in_domain_feat_cls_weight != 0.0:
+                    log_str += '| ind: {:.4f}| cmb: {:.4f}'.format(ind_vas[-1], cmb_vas[-1])
+
+                log_str += ', sess acc: %s' % str(np.around(vas[:-1], 4))
+                if args.in_domain_feat_cls_weight != 0.0:
+                    log_str += '| ind: %s| cmb: %s' % (str(np.around(ind_vas[:-1], 4)), str(np.around(cmb_vas[:-1], 4)))
+
+                if key_acc > max_acc:
+                    max_acc = key_acc
+                    self.best_model_dict = deepcopy(self.model.state_dict())
+                    save_model_dir = os.path.join(args.save_path, 'max_acc.pth')
+                    torch.save(dict(params=self.model.state_dict()), save_model_dir)
+
+                log_str += ', max acc: {:.4f}'.format(max_acc)
+
+                log(self.out_log, log_str)
+                # log(self.out_log, str([epoch, np.around(tsa, 3), np.around(vas[-1], 3), np.around(vas[:-1], 3)]))
             
             scheduler.step()
 
             print('This epoch takes %d seconds' % (time.time() - start_time), 'still need around %.2f mins' % ((time.time() - start_time) * (args.epochs_base - epoch) / 60))
-            
 
         t_end_time = time.time()
         total_time = (t_end_time - t_start_time) / 60

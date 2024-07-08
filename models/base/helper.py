@@ -171,6 +171,7 @@ def replace_base_fc(trainset, transform, model, args):
 
 def test(model, testloader, epoch, args, session, is_base=False):
     test_class = args.base_class + session * args.way
+    print(get_accuracy_per_class(model, testloader, test_class))
     model = model.eval()
     vl = Averager(); va = Averager()
     if args.in_domain_feat_cls_weight != 0.0:
@@ -214,6 +215,27 @@ def test(model, testloader, epoch, args, session, is_base=False):
         #print('epo {}, test, loss={:.4f} acc={:.4f} (ind {:.4f}, cmb {:.4f})'.format(epoch, vl, va, ind_va, cmb_va))#; exit()
         return vl, va, ind_va, cmb_va
 
+def get_accuracy_per_class(model, testloader, num_classes):
+    model.eval()
+    correct_per_class = [0] * num_classes
+    total_per_class = [0] * num_classes
+
+    with torch.no_grad():
+        for inputs, labels in testloader:
+            if torch.cuda.is_available():
+                inputs = inputs.cuda()
+                labels = labels.cuda()
+
+            outputs = model(inputs)
+            _, preds = torch.max(outputs, 1)
+
+            for i in range(num_classes):
+                class_mask = (labels == i)
+                correct_per_class[i] += (preds[class_mask] == labels[class_mask]).sum().item()
+                total_per_class[i] += class_mask.sum().item()
+
+    acc_per_class = [correct / total if total != 0 else 0 for correct, total in zip(correct_per_class, total_per_class)]
+    return acc_per_class
 
 def test_all_sessions(model, testloader, epoch, args, total_session):
     # given the input of the last session, output acc of all sessions
@@ -256,6 +278,7 @@ def test_all_sessions(model, testloader, epoch, args, total_session):
            
             for k in range(total_session + 1): # the last session is for all the novel classes
                 test_class = args.base_class + k * args.way
+                print(get_accuracy_per_class(model, testloader, test_class))
                 if k < total_session:
                     test_logits = logits[:, :test_class]
                 else:

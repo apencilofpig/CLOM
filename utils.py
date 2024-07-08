@@ -5,6 +5,9 @@ import time
 
 import numpy as np
 import sys
+
+from sklearn.manifold import TSNE
+
 np.set_printoptions(threshold=sys.maxsize)
 import pprint as pprint
 
@@ -92,3 +95,33 @@ def log(out, log_str):
     out.write(log_str + '\n')
     out.flush()
     print(log_str)
+
+
+def get_features(loader, transform, model):
+    model = model.eval()
+
+    loader.dataset.transform = transform
+    embedding_list = []
+    label_list = []
+    # data_list=[]
+    with torch.no_grad():
+        for i, batch in enumerate(loader):
+            data, label = [_.cuda() for _ in batch]
+            model.mode = 'encoder'
+            embedding = model(data)
+
+            embedding_list.append(embedding.cpu())
+            label_list.append(label.cpu())
+    embedding_list = torch.cat(embedding_list, dim=0)
+    label_list = torch.cat(label_list, dim=0)
+    np.save('embedding_list.npy', embedding_list.numpy())
+    np.save('label_list.npy', label_list.numpy())
+    return embedding_list, label_list
+
+def save_s_tne(features, labels):
+    # 创建 t-SNE 实例并拟合数据
+    tsne = TSNE(n_components=2, perplexity=50, random_state=42)
+    test_features_tsne = tsne.fit_transform(features)
+
+    np.save('features_tsne.npy', test_features_tsne)
+    np.save('label_list.npy', labels)

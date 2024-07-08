@@ -10,13 +10,6 @@ def set_up_datasets(args):
         args.way = 5
         args.shot = 5
         args.sessions = 9
-    if args.dataset =="manyshotcifar":
-        import dataloader.cifar100.manyshot_cifar as Dataset
-        args.base_class = 60
-        args.num_classes=100
-        args.way = 5
-        args.shot = args.shot_num
-        args.sessions = 9
     if args.dataset == 'cub200':
         import dataloader.cub200.cub200 as Dataset
         args.base_class = 100
@@ -24,15 +17,6 @@ def set_up_datasets(args):
         args.way = 10
         args.shot = 5
         args.sessions = 11
-    
-    if args.dataset == 'manyshotcub':
-        import dataloader.cub200.manyshot_cub as Dataset
-        args.base_class = 100
-        args.num_classes = 200
-        args.way = 10
-        args.shot = args.shot_num
-        args.sessions = 11
-
     if args.dataset == 'mini_imagenet':
         import dataloader.miniimagenet.miniimagenet as Dataset
         args.base_class = 60
@@ -40,40 +24,13 @@ def set_up_datasets(args):
         args.way = 5
         args.shot = 5
         args.sessions = 9
-
-    if args.dataset == 'mini_imagenet_withpath':
-        import dataloader.miniimagenet.miniimagenet_with_img as Dataset
-        args.base_class = 60
-        args.num_classes=100
+    if args.dataset == 'swat':
+        import dataloader.swat.swat as Dataset
+        args.base_class = 26
+        args.num_classes=36
         args.way = 5
         args.shot = 5
-        args.sessions = 9
-    
-    
-    if args.dataset == 'manyshotmini':
-        import dataloader.miniimagenet.manyshot_mini as Dataset
-        args.base_class = 60
-        args.num_classes=100
-        args.way = 5
-        args.shot = args.shot_num
-        args.sessions = 9
-    
-    if args.dataset == 'imagenet100':
-        import dataloader.imagenet100.ImageNet as Dataset
-        args.base_class = 60
-        args.num_classes=100
-        args.way = 5
-        args.shot = 5
-        args.sessions = 9
-
-    if args.dataset == 'imagenet1000':
-        import dataloader.imagenet1000.ImageNet as Dataset
-        args.base_class = 600
-        args.num_classes=1000
-        args.way = 50
-        args.shot = 5
-        args.sessions = 9
-
+        args.sessions = 3
     args.Dataset=Dataset
     return args
 
@@ -81,7 +38,7 @@ def get_dataloader(args,session):
     if session == 0:
         trainset, trainloader, testloader = get_base_dataloader(args)
     else:
-        trainset, trainloader, testloader = get_new_dataloader(args)
+        trainset, trainloader, testloader = get_new_dataloader(args, session)
     return trainset, trainloader, testloader
 
 def get_base_dataloader(args):
@@ -104,15 +61,16 @@ def get_base_dataloader(args):
                                              index=class_index, base_sess=True)
         testset = args.Dataset.MiniImageNet(root=args.dataroot, train=False, index=class_index)
 
-    if args.dataset == 'imagenet100' or args.dataset == 'imagenet1000':
-        trainset = args.Dataset.ImageNet(root=args.dataroot, train=True,
-                                             index=class_index, base_sess=True)
-        testset = args.Dataset.ImageNet(root=args.dataroot, train=False, index=class_index)
+    if args.dataset == 'swat':
+        trainset = args.Dataset.Swat(root=args.dataroot, train=True,
+                                       index=class_index, base_sess=True)
+        testset = args.Dataset.Swat(root=args.dataroot, train=False, index=class_index)
+
 
     trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_size=args.batch_size_base, shuffle=True,
-                                              num_workers=args.num_workers, pin_memory=True)
+                                              num_workers=args.num_workers)
     testloader = torch.utils.data.DataLoader(
-        dataset=testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+        dataset=testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers)
 
     return trainset, trainloader, testloader
 
@@ -139,15 +97,14 @@ def get_base_dataloader_meta(args):
                                             index=class_index)
 
 
-    # DataLoader(test_set, batch_sampler=sampler, num_workers=args.num_workers, pin_memory=True)
+    # DataLoader(test_set, batch_sampler=sampler, num_workers=8, pin_memory=True)
     sampler = CategoriesSampler(trainset.targets, args.train_episode, args.episode_way,
                                 args.episode_shot + args.episode_query)
 
-    trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_sampler=sampler, num_workers=args.num_workers,
-                                              pin_memory=True)
+    trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_sampler=sampler, num_workers=args.num_workers)
 
     testloader = torch.utils.data.DataLoader(
-        dataset=testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+        dataset=testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers)
 
     return trainset, trainloader, testloader
 
@@ -163,17 +120,16 @@ def get_new_dataloader(args,session):
     if args.dataset == 'mini_imagenet':
         trainset = args.Dataset.MiniImageNet(root=args.dataroot, train=True,
                                        index_path=txt_path)
-    if args.dataset == 'imagenet100' or args.dataset == 'imagenet1000':
-        trainset = args.Dataset.ImageNet(root=args.dataroot, train=True,
-                                       index_path=txt_path)
-
+    if args.dataset == 'swat':
+        trainset = args.Dataset.Swat(root=args.dataroot, train=True,
+                                       index=np.arange(args.base_class + (session-1) * args.way, args.base_class + session * args.way))
     if args.batch_size_new == 0:
         batch_size_new = trainset.__len__()
         trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_size=batch_size_new, shuffle=False,
-                                                  num_workers=args.num_workers, pin_memory=True)
+                                                  num_workers=args.num_workers)
     else:
         trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_size=args.batch_size_new, shuffle=True,
-                                                  num_workers=args.num_workers, pin_memory=True)
+                                                  num_workers=args.num_workers)
 
     # test on all encountered classes
     class_new = get_session_classes(args, session)
@@ -187,12 +143,12 @@ def get_new_dataloader(args,session):
     if args.dataset == 'mini_imagenet':
         testset = args.Dataset.MiniImageNet(root=args.dataroot, train=False,
                                       index=class_new)
-    if args.dataset == 'imagenet100' or args.dataset == 'imagenet1000':
-        testset = args.Dataset.ImageNet(root=args.dataroot, train=False,
+    if args.dataset == 'swat':
+        testset = args.Dataset.Swat(root=args.dataroot, train=False,
                                       index=class_new)
 
     testloader = torch.utils.data.DataLoader(dataset=testset, batch_size=args.test_batch_size, shuffle=False,
-                                             num_workers=args.num_workers, pin_memory=True)
+                                             num_workers=args.num_workers)
 
     return trainset, trainloader, testloader
 

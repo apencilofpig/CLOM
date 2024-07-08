@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models.resnet18_encoder import *
 from models.resnet20_cifar import *
+import models.resnet18_swat
 import numpy as np
 
 class MYNET(nn.Module):
@@ -23,6 +24,12 @@ class MYNET(nn.Module):
             self.num_features = 512
         if self.args.dataset == 'cub200':
             self.encoder = resnet18(True, args)  # pretrained=True follow TOPIC, models for cub is imagenet pre-trained. https://github.com/xyutao/fscil/issues/11#issuecomment-687548790
+            self.num_features = 512
+        if self.args.dataset in ['swat']:
+            self.encoder = nn.Sequential(
+                nn.Embedding(256, 32),
+                models.resnet18_swat.resnet18(False, args)
+            )
             self.num_features = 512
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
