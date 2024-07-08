@@ -1,0 +1,1239 @@
+Subject: [PATCH] add swat support
+---
+Index: .gitignore
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+--- /dev/null	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
++++ b/.gitignore	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -0,0 +1,6 @@
++__pycache__/
++checkpoint/
++data/
++!data/index_list/
++acc_logs/
++t-sne/
+Index: dataloader/data_utils.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/dataloader/data_utils.py b/dataloader/data_utils.py
+--- a/dataloader/data_utils.py	(revision a3acdd5451b7f3325a2a25301e811507b6b6d7b0)
++++ b/dataloader/data_utils.py	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -10,13 +10,6 @@
+         args.way = 5
+         args.shot = 5
+         args.sessions = 9
+-    if args.dataset =="manyshotcifar":
+-        import dataloader.cifar100.manyshot_cifar as Dataset
+-        args.base_class = 60
+-        args.num_classes=100
+-        args.way = 5
+-        args.shot = args.shot_num
+-        args.sessions = 9
+     if args.dataset == 'cub200':
+         import dataloader.cub200.cub200 as Dataset
+         args.base_class = 100
+@@ -24,15 +17,6 @@
+         args.way = 10
+         args.shot = 5
+         args.sessions = 11
+-    
+-    if args.dataset == 'manyshotcub':
+-        import dataloader.cub200.manyshot_cub as Dataset
+-        args.base_class = 100
+-        args.num_classes = 200
+-        args.way = 10
+-        args.shot = args.shot_num
+-        args.sessions = 11
+-
+     if args.dataset == 'mini_imagenet':
+         import dataloader.miniimagenet.miniimagenet as Dataset
+         args.base_class = 60
+@@ -40,40 +24,13 @@
+         args.way = 5
+         args.shot = 5
+         args.sessions = 9
+-
+-    if args.dataset == 'mini_imagenet_withpath':
+-        import dataloader.miniimagenet.miniimagenet_with_img as Dataset
+-        args.base_class = 60
+-        args.num_classes=100
++    if args.dataset == 'swat':
++        import dataloader.swat.swat as Dataset
++        args.base_class = 26
++        args.num_classes=36
+         args.way = 5
+         args.shot = 5
+-        args.sessions = 9
+-    
+-    
+-    if args.dataset == 'manyshotmini':
+-        import dataloader.miniimagenet.manyshot_mini as Dataset
+-        args.base_class = 60
+-        args.num_classes=100
+-        args.way = 5
+-        args.shot = args.shot_num
+-        args.sessions = 9
+-    
+-    if args.dataset == 'imagenet100':
+-        import dataloader.imagenet100.ImageNet as Dataset
+-        args.base_class = 60
+-        args.num_classes=100
+-        args.way = 5
+-        args.shot = 5
+-        args.sessions = 9
+-
+-    if args.dataset == 'imagenet1000':
+-        import dataloader.imagenet1000.ImageNet as Dataset
+-        args.base_class = 600
+-        args.num_classes=1000
+-        args.way = 50
+-        args.shot = 5
+-        args.sessions = 9
+-
++        args.sessions = 3
+     args.Dataset=Dataset
+     return args
+ 
+@@ -81,7 +38,7 @@
+     if session == 0:
+         trainset, trainloader, testloader = get_base_dataloader(args)
+     else:
+-        trainset, trainloader, testloader = get_new_dataloader(args)
++        trainset, trainloader, testloader = get_new_dataloader(args, session)
+     return trainset, trainloader, testloader
+ 
+ def get_base_dataloader(args):
+@@ -104,15 +61,16 @@
+                                              index=class_index, base_sess=True)
+         testset = args.Dataset.MiniImageNet(root=args.dataroot, train=False, index=class_index)
+ 
+-    if args.dataset == 'imagenet100' or args.dataset == 'imagenet1000':
+-        trainset = args.Dataset.ImageNet(root=args.dataroot, train=True,
+-                                             index=class_index, base_sess=True)
+-        testset = args.Dataset.ImageNet(root=args.dataroot, train=False, index=class_index)
++    if args.dataset == 'swat':
++        trainset = args.Dataset.Swat(root=args.dataroot, train=True,
++                                       index=class_index, base_sess=True)
++        testset = args.Dataset.Swat(root=args.dataroot, train=False, index=class_index)
++
+ 
+     trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_size=args.batch_size_base, shuffle=True,
+-                                              num_workers=args.num_workers, pin_memory=True)
++                                              num_workers=args.num_workers)
+     testloader = torch.utils.data.DataLoader(
+-        dataset=testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
++        dataset=testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers)
+ 
+     return trainset, trainloader, testloader
+ 
+@@ -139,15 +97,14 @@
+                                             index=class_index)
+ 
+ 
+-    # DataLoader(test_set, batch_sampler=sampler, num_workers=args.num_workers, pin_memory=True)
++    # DataLoader(test_set, batch_sampler=sampler, num_workers=8, pin_memory=True)
+     sampler = CategoriesSampler(trainset.targets, args.train_episode, args.episode_way,
+                                 args.episode_shot + args.episode_query)
+ 
+-    trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_sampler=sampler, num_workers=args.num_workers,
+-                                              pin_memory=True)
++    trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_sampler=sampler, num_workers=args.num_workers)
+ 
+     testloader = torch.utils.data.DataLoader(
+-        dataset=testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
++        dataset=testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers)
+ 
+     return trainset, trainloader, testloader
+ 
+@@ -163,17 +120,16 @@
+     if args.dataset == 'mini_imagenet':
+         trainset = args.Dataset.MiniImageNet(root=args.dataroot, train=True,
+                                        index_path=txt_path)
+-    if args.dataset == 'imagenet100' or args.dataset == 'imagenet1000':
+-        trainset = args.Dataset.ImageNet(root=args.dataroot, train=True,
+-                                       index_path=txt_path)
+-
++    if args.dataset == 'swat':
++        trainset = args.Dataset.Swat(root=args.dataroot, train=True,
++                                       index=np.arange(args.base_class + (session-1) * args.way, args.base_class + session * args.way))
+     if args.batch_size_new == 0:
+         batch_size_new = trainset.__len__()
+         trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_size=batch_size_new, shuffle=False,
+-                                                  num_workers=args.num_workers, pin_memory=True)
++                                                  num_workers=args.num_workers)
+     else:
+         trainloader = torch.utils.data.DataLoader(dataset=trainset, batch_size=args.batch_size_new, shuffle=True,
+-                                                  num_workers=args.num_workers, pin_memory=True)
++                                                  num_workers=args.num_workers)
+ 
+     # test on all encountered classes
+     class_new = get_session_classes(args, session)
+@@ -187,15 +143,15 @@
+     if args.dataset == 'mini_imagenet':
+         testset = args.Dataset.MiniImageNet(root=args.dataroot, train=False,
+                                       index=class_new)
+-    if args.dataset == 'imagenet100' or args.dataset == 'imagenet1000':
+-        testset = args.Dataset.ImageNet(root=args.dataroot, train=False,
++    if args.dataset == 'swat':
++        testset = args.Dataset.Swat(root=args.dataroot, train=False,
+                                       index=class_new)
+ 
+     testloader = torch.utils.data.DataLoader(dataset=testset, batch_size=args.test_batch_size, shuffle=False,
+-                                             num_workers=args.num_workers, pin_memory=True)
++                                             num_workers=args.num_workers)
+ 
+     return trainset, trainloader, testloader
+ 
+ def get_session_classes(args,session):
+     class_list=np.arange(args.base_class + session * args.way)
+-    return class_list
++    return class_list
+\ No newline at end of file
+Index: dataloader/swat/swat.ipynb
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/dataloader/swat/swat.ipynb b/dataloader/swat/swat.ipynb
+new file mode 100644
+--- /dev/null	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
++++ b/dataloader/swat/swat.ipynb	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -0,0 +1,70 @@
++{
++ "cells": [
++  {
++   "cell_type": "code",
++   "execution_count": 1,
++   "metadata": {},
++   "outputs": [],
++   "source": [
++    "import pandas as pd\n",
++    "import numpy as np"
++   ]
++  },
++  {
++   "cell_type": "code",
++   "execution_count": 2,
++   "metadata": {},
++   "outputs": [],
++   "source": [
++    "df = pd.read_csv('../../data/swat/swat_ieee754.csv')"
++   ]
++  },
++  {
++   "cell_type": "code",
++   "execution_count": 3,
++   "metadata": {},
++   "outputs": [],
++   "source": [
++    "inputs = df.iloc[:, :-1]\n",
++    "labels = (df.iloc[:, -1])"
++   ]
++  },
++  {
++   "cell_type": "code",
++   "execution_count": 4,
++   "metadata": {},
++   "outputs": [],
++   "source": [
++    "counts = labels.value_counts()"
++   ]
++  },
++  {
++   "cell_type": "code",
++   "execution_count": null,
++   "metadata": {},
++   "outputs": [],
++   "source": []
++  }
++ ],
++ "metadata": {
++  "kernelspec": {
++   "display_name": "Python 3",
++   "language": "python",
++   "name": "python3"
++  },
++  "language_info": {
++   "codemirror_mode": {
++    "name": "ipython",
++    "version": 3
++   },
++   "file_extension": ".py",
++   "mimetype": "text/x-python",
++   "name": "python",
++   "nbconvert_exporter": "python",
++   "pygments_lexer": "ipython3",
++   "version": "3.8.17"
++  }
++ },
++ "nbformat": 4,
++ "nbformat_minor": 2
++}
+Index: dataloader/swat/swat.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/dataloader/swat/swat.py b/dataloader/swat/swat.py
+new file mode 100644
+--- /dev/null	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
++++ b/dataloader/swat/swat.py	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -0,0 +1,135 @@
++import os
++import os.path as osp
++
++import numpy as np
++import pandas as pd
++from sklearn.model_selection import train_test_split
++import torch
++from PIL import Image
++from torch.utils.data import Dataset
++from torchvision import transforms
++
++def restraint_samples_number(inputs, labels, max_class_item):
++    # 统计每个类的样本数量
++    unique_labels, counts = np.unique(labels, return_counts=True)
++
++    # 创建一个空列表,用于存储处理后的 inputs 和 labels
++    new_inputs = []
++    new_labels = []
++
++    # 遍历每个类
++    for label, count in zip(unique_labels, counts):
++        # 找到该类对应的索引
++        index = np.where(labels == label)[0]
++        
++        # 如果样本数量小于等于 400,则全部保留
++        if count <= max_class_item:
++            new_inputs.extend(inputs[index])
++            new_labels.extend(labels[index])
++        # 如果样本数量大于 400,则随机选择 400 个保留
++        else:
++            selected_index = np.random.choice(index, size=max_class_item, replace=False)
++            new_inputs.extend(inputs[selected_index])
++            new_labels.extend(labels[selected_index])
++
++    # 将列表转换回 NumPy 数组
++    new_inputs = np.array(new_inputs)
++    new_labels = np.array(new_labels)
++    return new_inputs, new_labels
++
++def remove_unused_index(inputs, labels, index_to_remove):
++    # 创建条件索引，标记要保留的数据
++    index_to_keep = np.ones(len(labels), dtype=bool)
++    index_to_keep[index_to_remove] = False
++
++    return inputs[index_to_keep], labels[index_to_keep]
++
++def get_class_items(inputs, labels, cls_idx):
++    if not hasattr(cls_idx, '__iter__'):
++        index = np.where(labels == cls_idx)[0]
++    else:
++        index = None
++        for each in cls_idx:
++            index = np.where(labels == each)[0] if index is None else np.append(index, np.where(labels == each)[0])
++    return index, inputs[index], labels[index] 
++
++def get_few_shot_from_txt():
++    index2 = open('data/index_list/swat/session_2.txt').read().splitlines()
++    index3 = open('data/index_list/swat/session_3.txt').read().splitlines()
++    index_all = np.array([int(x) for x in (index2 + index3)])
++    return index_all, inputs[index_all], labels[index_all]
++
++def generate_few_shot(inputs, labels, shot, cls_idx):
++    index_all = None
++    for idx in cls_idx:
++        index, cls_inputs, cls_labels = get_class_items(inputs, labels, idx)
++        idx_to_keep = np.random.choice(index, shot, replace=False)
++        index_all = np.concatenate((index_all, idx_to_keep), axis=0) if index_all is not None else idx_to_keep
++    return index_all, inputs[index_all], labels[index_all]
++
++def generate_all_dataset(inputs, labels, base_class_num, shot):
++    incremental_index_train, incremental_inputs_train, incremental_labels_train = generate_few_shot(inputs, labels, shot, range(base_class_num, 36))
++    # incremental_index_train, incremental_inputs_train, incremental_labels_train = get_few_shot_from_txt()
++    inputs, labels = remove_unused_index(inputs, labels, incremental_index_train)
++    _, base_inputs, base_labels = get_class_items(inputs, labels, range(base_class_num))
++    _, incremental_inputs_test, incremental_labels_test = get_class_items(inputs, labels, range(base_class_num, 36))
++    
++    
++    # 找到标签为0的索引
++    zero_indices = np.where(base_labels == 0)[0]
++
++    # 从中选择要去除的数量
++    indices_to_remove = np.random.choice(zero_indices, len(zero_indices)-2000, replace=False)
++
++    base_inputs, base_labels = remove_unused_index(base_inputs, base_labels, indices_to_remove)
++
++    base_inputs_train, base_inputs_test, base_labels_train, base_labels_test = train_test_split(base_inputs, base_labels, test_size=0.5, random_state=3407)
++
++    print(incremental_index_train)
++
++    # base_inputs_train, base_labels_train = restraint_samples_number(base_inputs_train, base_labels_train, 128)
++
++    incremental_inputs_test, incremental_labels_test = restraint_samples_number(incremental_inputs_test, incremental_labels_test, 80)
++    base_inputs_test, base_labels_test = restraint_samples_number(base_inputs_test, base_labels_test, 80)
++
++    return base_inputs_train, base_labels_train, base_inputs_test, base_labels_test, incremental_inputs_train, incremental_labels_train, incremental_inputs_test, incremental_labels_test
++
++df = pd.read_csv('data/swat/swat_ieee754.csv')
++inputs = df.iloc[:, :-1].values
++labels = (df.iloc[:, -1].values) % 36
++# inputs = inputs / 256.0
++# inputs = np.pad(inputs, ((0,0), (0,144-126)), mode='constant', constant_values=0)
++# inputs = inputs.reshape(inputs.shape[0], 1, 12, 12)
++inputs = inputs.reshape(inputs.shape[0], 1, -1)
++base_inputs_train, base_labels_train, base_inputs_test, base_labels_test, incremental_inputs_train, incremental_labels_train, incremental_inputs_test, incremental_labels_test = generate_all_dataset(inputs, labels, 26, 5)
++
++
++class Swat(Dataset):
++
++    def __init__(self, root, train=True, transform=None,
++                 index_path=None, index=None, base_sess=None):
++        self.root = os.path.expanduser(root)
++        self.train = train  # training set or test set
++        self.transform = transform
++        
++        if train:
++            if base_sess:
++                self.data, self.targets = base_inputs_train, base_labels_train
++            else:
++                _, self.data, self.targets = get_class_items(incremental_inputs_train, incremental_labels_train, index)
++        else:
++            self.data = np.concatenate((base_inputs_test, incremental_inputs_test), axis=0)
++            self.targets = np.concatenate((base_labels_test, incremental_labels_test), axis=0)
++            _, self.data, self.targets = get_class_items(self.data, self.targets, index)
++
++        self.data = torch.from_numpy(self.data).long()
++        self.targets = torch.from_numpy(self.targets)
++
++
++    def __len__(self):
++        return len(self.data)
++
++    def __getitem__(self, i):
++        datas, targets = self.data[i], self.targets[i]
++        return datas, targets
++    
+Index: dataloader/swat/swat_bak.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/dataloader/swat/swat_bak.py b/dataloader/swat/swat_bak.py
+new file mode 100644
+--- /dev/null	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
++++ b/dataloader/swat/swat_bak.py	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -0,0 +1,97 @@
++import os
++import os.path as osp
++
++import numpy as np
++from sklearn.model_selection import train_test_split
++import torch
++from PIL import Image
++from torch.utils.data import Dataset
++from torchvision import transforms
++
++def read_files_in_folder(folder_path):
++    num_to_remove = []
++    for root, dirs, files in os.walk(folder_path):
++        for file_name in files:
++            file_path = os.path.join(root, file_name)
++            with open(file_path, 'r') as file:
++                for line in file:
++                    num_to_remove.append(int(line))
++
++    return num_to_remove
++
++
++class Swat(Dataset):
++
++    def __init__(self, root, train=True, transform=None,
++                 index_path=None, index=None, base_sess=None):
++        self.root = os.path.expanduser(root)
++        self.train = train  # training set or test set
++        self.transform = transform
++        self.np_inputs = np.load(self.root + '/swat/ieee754_inputs.npy')
++        self.np_labels = np.load(self.root + '/swat/labels.npy').astype(np.int64)
++        # self.np_inputs = np.transpose(self.np_inputs, (0, 2, 1))
++        self.np_inputs = self.np_inputs.reshape(self.np_inputs.shape[0], 1, -1)
++        
++        num_to_remove = read_files_in_folder('data/index_list/swat')
++
++        # 找到标签为0的索引
++        zero_indices = np.where(self.np_labels == 0)[0]
++
++        # 从中选择要去除的数量
++        indices_to_remove = np.random.choice(zero_indices, len(zero_indices)-2000, replace=False)
++
++        num_to_remove = np.concatenate((num_to_remove,indices_to_remove),axis=0)
++
++        # 创建条件索引，标记要保留的数据
++        index_to_keep = np.ones(len(self.np_labels), dtype=bool)
++        index_to_keep[num_to_remove] = False
++
++        # 使用条件索引，保留标签不为0的数据
++        filtered_np_inputs = self.np_inputs[index_to_keep]
++        filtered_np_labels = self.np_labels[index_to_keep]
++        np_inputs_train, np_inputs_test, np_labels_train, np_labels_test = train_test_split(filtered_np_inputs, filtered_np_labels, test_size=0.2, random_state=42)
++        
++        if train:
++            self.data = np_inputs_train
++            self.targets = np_labels_train
++            # self.data, self.targets = self.SelectfromTxt(self.data2label, index_path)
++            if base_sess:
++                self.data, self.targets = self.SelectfromClasses(self.data, self.targets, index)
++            else:
++                self.data, self.targets = self.SelectfromTxt(index_path)
++        else:
++            self.data = np_inputs_test
++            self.targets = np_labels_test
++            self.data, self.targets = self.SelectfromClasses(self.data, self.targets, index)
++
++    def SelectfromTxt(self, index_path):
++        index = open(index_path).read().splitlines()
++        data_tmp = []
++        targets_tmp = []
++        for i in index:
++            data_tmp.append(self.np_inputs[int(i)])           
++            targets_tmp.append(self.np_labels[int(i)])
++
++        return data_tmp, targets_tmp
++
++    def SelectfromClasses(self, data, targets, index):
++        data_tmp = []
++        targets_tmp = []
++        count = 0
++        for i in index:
++            ind_cl = np.where(i == targets)[0]
++            for j in ind_cl:
++                data_tmp.append(data[j])
++                targets_tmp.append(targets[j])
++                count = count + 1
++                # if count == 200:
++                #   break
++
++        return data_tmp, targets_tmp
++
++    def __len__(self):
++        return len(self.data)
++
++    def __getitem__(self, i):
++        datas, targets = self.data[i], self.targets[i]
++        return datas, targets
+\ No newline at end of file
+Index: models/base/Network.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/models/base/Network.py b/models/base/Network.py
+--- a/models/base/Network.py	(revision a3acdd5451b7f3325a2a25301e811507b6b6d7b0)
++++ b/models/base/Network.py	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -5,6 +5,7 @@
+ import torch.nn.functional as F
+ from models.resnet18_encoder import *
+ from models.resnet20_cifar import *
++import models.resnet18_swat
+ import numpy as np
+ 
+ class MYNET(nn.Module):
+@@ -23,6 +24,12 @@
+             self.num_features = 512
+         if self.args.dataset == 'cub200':
+             self.encoder = resnet18(True, args)  # pretrained=True follow TOPIC, models for cub is imagenet pre-trained. https://github.com/xyutao/fscil/issues/11#issuecomment-687548790
++            self.num_features = 512
++        if self.args.dataset in ['swat']:
++            self.encoder = nn.Sequential(
++                nn.Embedding(256, 32),
++                models.resnet18_swat.resnet18(False, args)
++            )
+             self.num_features = 512
+         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+ 
+Index: models/base/fscil_trainer.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/models/base/fscil_trainer.py b/models/base/fscil_trainer.py
+--- a/models/base/fscil_trainer.py	(revision a3acdd5451b7f3325a2a25301e811507b6b6d7b0)
++++ b/models/base/fscil_trainer.py	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -91,53 +91,57 @@
+                 tsl, tsa = test(self.model, base_testloader, epoch, args, 0, is_base=True)
+             else:
+                 tsl, tsa, ind_va, cmb_va = test(self.model, base_testloader, epoch, args, 0, is_base=True)
+-            
+-            ##### test model with all sessions #####
+-            self.model = replace_base_fc(base_train_set, base_testloader.dataset.transform, self.model, args)
+-                       
+-            self.model.mode = self.args.new_mode
+-            for k in range(1, args.sessions):
+-                session_train_set, session_trainloader, session_testloader = self.get_dataloader(k)
+-                self.model.update_fc(session_trainloader, np.unique(session_train_set.targets), k)
+-            
+-            # here session_testloader is the last session's testloader
+-            return_list = test_all_sessions(self.model, session_testloader, 0, args, args.sessions)
++
++            if epoch % 1 == 0 or epoch == args.epochs_base - 1:
++                ##### test model with all sessions #####
++                self.model = replace_base_fc(base_train_set, base_testloader.dataset.transform, self.model, args)
++
++                self.model.mode = self.args.new_mode
++                for k in range(1, args.sessions):
++                    session_train_set, session_trainloader, session_testloader = self.get_dataloader(k)
++                    self.model.update_fc(session_trainloader, np.unique(session_train_set.targets), k)
++
++                # here session_testloader is the last session's testloader
++                return_list = test_all_sessions(self.model, session_testloader, 0, args, args.sessions)
+ 
+-            if args.in_domain_feat_cls_weight == 0.0:
+-                vls, vas = return_list
+-                key_acc = vas[-2]
+-            else:
+-                vls, vas, ind_vas, cmb_vas = return_list
+-                key_acc = cmb_vas[-2]
+-            
+-            log_str = 'epoch: %d'%epoch
+-            log_str += ', base acc: {:.4f}'.format(tsa)
+-            if args.in_domain_feat_cls_weight != 0.0:
+-                log_str += '| ind: {:.4f}| cmb: {:.4f}'.format(ind_va, cmb_va)
++                if epoch == args.epochs_base - 1:
++                    embedding_list, label_list = get_features(session_testloader, session_testloader.dataset.transform, self.model)
++                    save_s_tne(embedding_list.numpy(), label_list.numpy())
++
++                if args.in_domain_feat_cls_weight == 0.0:
++                    vls, vas = return_list
++                    key_acc = vas[-2]
++                else:
++                    vls, vas, ind_vas, cmb_vas = return_list
++                    key_acc = cmb_vas[-2]
++
++                log_str = 'epoch: %d' % epoch
++                log_str += ', base acc: {:.4f}'.format(tsa)
++                if args.in_domain_feat_cls_weight != 0.0:
++                    log_str += '| ind: {:.4f}| cmb: {:.4f}'.format(ind_va, cmb_va)
+ 
+-            log_str += ', novel acc: {:.4f}'.format(vas[-1])
+-            if args.in_domain_feat_cls_weight != 0.0:
+-                log_str += '| ind: {:.4f}| cmb: {:.4f}'.format(ind_vas[-1], cmb_vas[-1])
+-            
+-            log_str += ', sess acc: %s'%str(np.around(vas[:-1], 4))
+-            if args.in_domain_feat_cls_weight != 0.0:
+-                log_str += '| ind: %s| cmb: %s'%(str(np.around(ind_vas[:-1], 4)), str(np.around(cmb_vas[:-1], 4)))
++                log_str += ', novel acc: {:.4f}'.format(vas[-1])
++                if args.in_domain_feat_cls_weight != 0.0:
++                    log_str += '| ind: {:.4f}| cmb: {:.4f}'.format(ind_vas[-1], cmb_vas[-1])
++
++                log_str += ', sess acc: %s' % str(np.around(vas[:-1], 4))
++                if args.in_domain_feat_cls_weight != 0.0:
++                    log_str += '| ind: %s| cmb: %s' % (str(np.around(ind_vas[:-1], 4)), str(np.around(cmb_vas[:-1], 4)))
+ 
+-            if key_acc > max_acc:
+-                max_acc = key_acc
+-                self.best_model_dict = deepcopy(self.model.state_dict())
+-                save_model_dir = os.path.join(args.save_path, 'max_acc.pth')
+-                torch.save(dict(params=self.model.state_dict()), save_model_dir)
++                if key_acc > max_acc:
++                    max_acc = key_acc
++                    self.best_model_dict = deepcopy(self.model.state_dict())
++                    save_model_dir = os.path.join(args.save_path, 'max_acc.pth')
++                    torch.save(dict(params=self.model.state_dict()), save_model_dir)
+ 
+-            log_str += ', max acc: {:.4f}'.format(max_acc)
++                log_str += ', max acc: {:.4f}'.format(max_acc)
+ 
+-            log(self.out_log, log_str)
+-            #log(self.out_log, str([epoch, np.around(tsa, 3), np.around(vas[-1], 3), np.around(vas[:-1], 3)]))
++                log(self.out_log, log_str)
++                # log(self.out_log, str([epoch, np.around(tsa, 3), np.around(vas[-1], 3), np.around(vas[:-1], 3)]))
+             
+             scheduler.step()
+ 
+             print('This epoch takes %d seconds' % (time.time() - start_time), 'still need around %.2f mins' % ((time.time() - start_time) * (args.epochs_base - epoch) / 60))
+-            
+ 
+         t_end_time = time.time()
+         total_time = (t_end_time - t_start_time) / 60
+Index: models/resnet18_swat.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/models/resnet18_swat.py b/models/resnet18_swat.py
+new file mode 100644
+--- /dev/null	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
++++ b/models/resnet18_swat.py	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -0,0 +1,497 @@
++import torch
++import torch.nn as nn
++import torch.nn.functional as F
++
++import errno
++import hashlib
++import os
++import warnings
++import re
++import shutil
++import sys
++import tempfile
++from tqdm import tqdm
++from urllib.request import urlopen
++from urllib.parse import urlparse  # noqa: F401
++
++
++def load_state_dict_from_url(url, model_dir=None, map_location=None, progress=True):
++    r"""Loads the Torch serialized object at the given URL.
++
++    If the object is already present in `model_dir`, it's deserialized and
++    returned. The filename part of the URL should follow the naming convention
++    ``filename-<sha256>.ext`` where ``<sha256>`` is the first eight or more
++    digits of the SHA256 hash of the contents of the file. The hash is used to
++    ensure unique names and to verify the contents of the file.
++
++    The default value of `model_dir` is ``$TORCH_HOME/checkpoints`` where
++    environment variable ``$TORCH_HOME`` defaults to ``$XDG_CACHE_HOME/torch``.
++    ``$XDG_CACHE_HOME`` follows the X Design Group specification of the Linux
++    filesytem layout, with a default value ``~/.cache`` if not set.
++
++    Args:
++        url (string): URL of the object to download
++        model_dir (string, optional): directory in which to save the object
++        map_location (optional): a function or a dict specifying how to remap storage locations (see torch.load)
++        progress (bool, optional): whether or not to display a progress bar to stderr
++
++    Example:
++        >>> state_dict = torch.hub.load_state_dict_from_url('https://s3.amazonaws.com/pytorch/models/resnet18-5c106cde.pth')
++
++    """
++    # Issue warning to move data if old env is set
++    if os.getenv('TORCH_MODEL_ZOO'):
++        warnings.warn('TORCH_MODEL_ZOO is deprecated, please use env TORCH_HOME instead')
++
++    if model_dir is None:
++        torch_home = _get_torch_home()
++        model_dir = os.path.join(torch_home, 'checkpoints')
++
++    try:
++        os.makedirs(model_dir)
++    except OSError as e:
++        if e.errno == errno.EEXIST:
++            # Directory already exists, ignore.
++            pass
++        else:
++            # Unexpected OSError, re-raise.
++            raise
++
++    parts = urlparse(url)
++    filename = os.path.basename(parts.path)
++    cached_file = os.path.join(model_dir, filename)
++    if not os.path.exists(cached_file):
++        sys.stderr.write('Downloading: "{}" to {}\n'.format(url, cached_file))
++        hash_prefix = HASH_REGEX.search(filename).group(1)
++        _download_url_to_file(url, cached_file, hash_prefix, progress=progress)
++    return torch.load(cached_file, map_location=map_location)
++
++
++def _download_url_to_file(url, dst, hash_prefix, progress):
++    file_size = None
++    u = urlopen(url)
++    meta = u.info()
++    if hasattr(meta, 'getheaders'):
++        content_length = meta.getheaders("Content-Length")
++    else:
++        content_length = meta.get_all("Content-Length")
++    if content_length is not None and len(content_length) > 0:
++        file_size = int(content_length[0])
++
++    # We deliberately save it in a temp file and move it after
++    # download is complete. This prevents a local working checkpoint
++    # being overriden by a broken download.
++    dst_dir = os.path.dirname(dst)
++    f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
++
++    try:
++        if hash_prefix is not None:
++            sha256 = hashlib.sha256()
++        with tqdm(total=file_size, disable=not progress,
++                  unit='B', unit_scale=True, unit_divisor=1024) as pbar:
++            while True:
++                buffer = u.read(8192)
++                if len(buffer) == 0:
++                    break
++                f.write(buffer)
++                if hash_prefix is not None:
++                    sha256.update(buffer)
++                pbar.update(len(buffer))
++
++        f.close()
++        if hash_prefix is not None:
++            digest = sha256.hexdigest()
++            if digest[:len(hash_prefix)] != hash_prefix:
++                raise RuntimeError('invalid hash value (expected "{}", got "{}")'
++                                   .format(hash_prefix, digest))
++        shutil.move(f.name, dst)
++    finally:
++        f.close()
++        if os.path.exists(f.name):
++            os.remove(f.name)
++
++
++ENV_TORCH_HOME = 'TORCH_HOME'
++ENV_XDG_CACHE_HOME = 'XDG_CACHE_HOME'
++DEFAULT_CACHE_DIR = '~/.cache'
++HASH_REGEX = re.compile(r'-([a-f0-9]*)\.')
++
++
++def _get_torch_home():
++    torch_home = os.path.expanduser(
++        os.getenv(ENV_TORCH_HOME,
++                  os.path.join(os.getenv(ENV_XDG_CACHE_HOME, DEFAULT_CACHE_DIR), 'torch')))
++    return torch_home
++
++
++
++__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
++           'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
++           'wide_resnet50_2', 'wide_resnet101_2']
++
++
++model_urls = {
++    'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
++    'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
++    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
++    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
++    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
++    'resnext50_32x4d': 'https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth',
++    'resnext101_32x8d': 'https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth',
++    'wide_resnet50_2': 'https://download.pytorch.org/models/wide_resnet50_2-95faca4d.pth',
++    'wide_resnet101_2': 'https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth',
++}
++
++
++def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
++    """3x3 convolution with padding"""
++    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
++                     padding=dilation, groups=groups, bias=False, dilation=dilation)
++
++
++def conv1x1(in_planes, out_planes, stride=1):
++    """1x1 convolution"""
++    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
++
++def conv3x1(in_planes, out_planes, stride=1):
++    """3x1 convolution"""
++    return nn.Conv2d(in_planes, out_planes, kernel_size=(3,1), stride=stride, padding=(1,0), bias=False)
++
++
++class BasicBlock(nn.Module):
++    expansion = 1
++
++    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
++                 base_width=64, dilation=1, norm_layer=None, last=False):
++        super(BasicBlock, self).__init__()
++        if norm_layer is None:
++            norm_layer = nn.BatchNorm2d
++        if groups != 1 or base_width != 64:
++            raise ValueError('BasicBlock only supports groups=1 and base_width=64')
++        if dilation > 1:
++            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
++        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
++        self.conv1 = conv3x1(inplanes, planes, stride)
++        self.bn1 = norm_layer(planes)
++        self.relu = nn.ReLU(inplace=True)
++        self.conv2 = conv3x1(planes, planes)
++        self.bn2 = norm_layer(planes)
++        self.downsample = downsample
++        self.stride = stride
++        if last:
++            self.conv1.is_warp_conv = True
++            self.conv2.is_warp_conv = True
++            if self.downsample is not None:
++                self.downsample[0].is_warp_conv = True
++
++    def forward(self, x):
++        identity = x
++
++        out = self.conv1(x)
++        out = self.bn1(out)
++        out = self.relu(out)
++
++        out = self.conv2(out)
++        out = self.bn2(out)
++
++        if self.downsample is not None:
++            identity = self.downsample(x)
++
++        out += identity
++        out = self.relu(out)
++
++        return out
++
++
++class Bottleneck(nn.Module):
++    expansion = 4
++
++    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
++                 base_width=64, dilation=1, norm_layer=None):
++        super(Bottleneck, self).__init__()
++        if norm_layer is None:
++            norm_layer = nn.BatchNorm2d
++        width = int(planes * (base_width / 64.)) * groups
++        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
++        self.conv1 = conv1x1(inplanes, width)
++        self.bn1 = norm_layer(width)
++        self.conv2 = conv3x3(width, width, stride, groups, dilation)
++        self.bn2 = norm_layer(width)
++        self.conv3 = conv1x1(width, planes * self.expansion)
++        self.bn3 = norm_layer(planes * self.expansion)
++        self.relu = nn.ReLU(inplace=True)
++        self.downsample = downsample
++        self.stride = stride
++
++    def forward(self, x):
++        identity = x
++
++        out = self.conv1(x)
++        out = self.bn1(out)
++        out = self.relu(out)
++
++        out = self.conv2(out)
++        out = self.bn2(out)
++        out = self.relu(out)
++
++        out = self.conv3(out)
++        out = self.bn3(out)
++
++        if self.downsample is not None:
++            identity = self.downsample(x)
++
++        out += identity
++        out = self.relu(out)
++
++        return out
++
++
++class ResNet(nn.Module):
++
++    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
++                 groups=1, width_per_group=64, replace_stride_with_dilation=None,
++                 norm_layer=None):
++        super(ResNet, self).__init__()
++        if norm_layer is None:
++            norm_layer = nn.BatchNorm2d
++        self._norm_layer = norm_layer
++
++        self.inplanes = 32
++        self.dilation = 1
++        if replace_stride_with_dilation is None:
++            # each element in the tuple indicates if we should replace
++            # the 2x2 stride with a dilated convolution instead
++            replace_stride_with_dilation = [False, False, False]
++        if len(replace_stride_with_dilation) != 3:
++            raise ValueError("replace_stride_with_dilation should be None "
++                             "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
++        self.groups = groups
++        self.base_width = width_per_group
++        self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=(3,1), stride=1, padding=(1,0),
++                               bias=False)
++        self.bn1 = norm_layer(self.inplanes)
++        self.relu = nn.ReLU(inplace=True)
++        self.maxpool = nn.MaxPool2d(kernel_size=(3,1), stride=1, padding=(1,0))
++        self.layer1 = self._make_layer(block, 32, layers[0])
++        self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
++                                       dilate=replace_stride_with_dilation[0])
++        self.layer3 = self._make_layer(block, 256, layers[2], stride=2,
++                                       dilate=replace_stride_with_dilation[1], last_phase=True)
++        self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
++                                       dilate=replace_stride_with_dilation[2], last_phase=True)
++        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
++        # self.fc = nn.Linear(512 * block.expansion, num_classes,bias=False)
++
++        for m in self.modules():
++            if isinstance(m, nn.Conv2d):
++                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
++            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
++                nn.init.constant_(m.weight, 1)
++                nn.init.constant_(m.bias, 0)
++
++        # Zero-initialize the last BN in each residual branch,
++        # so that the residual branch starts with zeros, and each residual block behaves like an identity.
++        # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
++        if zero_init_residual:
++            for m in self.modules():
++                if isinstance(m, Bottleneck):
++                    nn.init.constant_(m.bn3.weight, 0)
++                elif isinstance(m, BasicBlock):
++                    nn.init.constant_(m.bn2.weight, 0)
++
++    def _make_layer(self, block, planes, blocks, stride=1, dilate=False, last_phase=False):
++        norm_layer = self._norm_layer
++        downsample = None
++        previous_dilation = self.dilation
++        if dilate:
++            self.dilation *= stride
++            stride = 1
++        if stride != 1 or self.inplanes != planes * block.expansion:
++            downsample = nn.Sequential(
++                conv1x1(self.inplanes, planes * block.expansion, stride),
++                norm_layer(planes * block.expansion),
++            )
++
++        layers = []
++        if last_phase:
++            layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
++                                self.base_width, previous_dilation, norm_layer, last=True))
++        else:
++            layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
++                                self.base_width, previous_dilation, norm_layer))
++
++        self.inplanes = planes * block.expansion
++
++        if last_phase:
++            # for i in range(1, blocks-1):
++            #     layers.append(block(self.inplanes, planes))
++            # layers.append(block(self.inplanes, planes, last=True))
++            for _ in range(1, blocks-1):
++                layers.append(block(self.inplanes, planes, groups=self.groups,
++                                    base_width=self.base_width, dilation=self.dilation,
++                                    norm_layer=norm_layer, last=True))
++            layers.append(block(self.inplanes, planes, groups=self.groups,
++                                    base_width=self.base_width, dilation=self.dilation,
++                                    norm_layer=norm_layer, last=True))
++        else:
++            for _ in range(1, blocks):
++                layers.append(block(self.inplanes, planes, groups=self.groups,
++                                    base_width=self.base_width, dilation=self.dilation,
++                                    norm_layer=norm_layer))
++
++        return nn.Sequential(*layers)
++
++    def forward(self, x):
++        x = self.conv1(x)
++        x = self.bn1(x)
++        x = self.relu(x)
++        x = self.maxpool(x)
++
++        x = self.layer1(x)
++        x = self.layer2(x)
++        x = self.layer3(x)
++        x = self.layer4(x)
++
++        # x = self.avgpool(x)
++        # x = torch.flatten(x, 1)
++        # x = self.fc(x)
++        # x = F.linear(F.normalize(x, p=2, dim=-1), F.normalize(self.fc.weight, p=2, dim=-1))
++        # x = temperature * x
++
++        return x
++
++
++def _resnet(arch, block, layers, pretrained, progress, **kwargs):
++    model = ResNet(block, layers, **kwargs)
++    if pretrained:
++        model_dict = model.state_dict()
++        state_dict = load_state_dict_from_url(model_urls[arch],
++                                              progress=progress)
++        state_dict = {k: v for k, v in state_dict.items() if k not in ['fc.weight', 'fc.bias']}
++        model_dict.update(state_dict)
++        model.load_state_dict(model_dict)
++    return model
++
++
++def resnet18(pretrained=False, progress=True, **kwargs):
++    r"""ResNet-18 model from
++    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress,
++                   **kwargs)
++
++
++def resnet34(pretrained=False, progress=True, **kwargs):
++    r"""ResNet-34 model from
++    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    return _resnet('resnet34', BasicBlock, [3, 4, 6, 3], pretrained, progress,
++                   **kwargs)
++
++
++def resnet50(pretrained=False, progress=True, **kwargs):
++    r"""ResNet-50 model from
++    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress,
++                   **kwargs)
++
++
++def resnet101(pretrained=False, progress=True, **kwargs):
++    r"""ResNet-101 model from
++    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    return _resnet('resnet101', Bottleneck, [3, 4, 23, 3], pretrained, progress,
++                   **kwargs)
++
++
++def resnet152(pretrained=False, progress=True, **kwargs):
++    r"""ResNet-152 model from
++    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    return _resnet('resnet152', Bottleneck, [3, 8, 36, 3], pretrained, progress,
++                   **kwargs)
++
++
++def resnext50_32x4d(pretrained=False, progress=True, **kwargs):
++    r"""ResNeXt-50 32x4d model from
++    `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    kwargs['groups'] = 32
++    kwargs['width_per_group'] = 4
++    return _resnet('resnext50_32x4d', Bottleneck, [3, 4, 6, 3],
++                   pretrained, progress, **kwargs)
++
++
++def resnext101_32x8d(pretrained=False, progress=True, **kwargs):
++    r"""ResNeXt-101 32x8d model from
++    `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    kwargs['groups'] = 32
++    kwargs['width_per_group'] = 8
++    return _resnet('resnext101_32x8d', Bottleneck, [3, 4, 23, 3],
++                   pretrained, progress, **kwargs)
++
++
++def wide_resnet50_2(pretrained=False, progress=True, **kwargs):
++    r"""Wide ResNet-50-2 model from
++    `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
++
++    The model is the same as ResNet except for the bottleneck number of channels
++    which is twice larger in every block. The number of channels in outer 1x1
++    convolutions is the same, e.g. last block in ResNet-50 has 2048-512-2048
++    channels, and in Wide ResNet-50-2 has 2048-1024-2048.
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    kwargs['width_per_group'] = 64 * 2
++    return _resnet('wide_resnet50_2', Bottleneck, [3, 4, 6, 3],
++                   pretrained, progress, **kwargs)
++
++
++def wide_resnet101_2(pretrained=False, progress=True, **kwargs):
++    r"""Wide ResNet-101-2 model from
++    `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
++
++    The model is the same as ResNet except for the bottleneck number of channels
++    which is twice larger in every block. The number of channels in outer 1x1
++    convolutions is the same, e.g. last block in ResNet-50 has 2048-512-2048
++    channels, and in Wide ResNet-50-2 has 2048-1024-2048.
++
++    Args:
++        pretrained (bool): If True, returns a model pre-trained on ImageNet
++        progress (bool): If True, displays a progress bar of the download to stderr
++    """
++    kwargs['width_per_group'] = 64 * 2
++    return _resnet('wide_resnet101_2', Bottleneck, [3, 4, 23, 3],
++                   pretrained, progress, **kwargs)
+Index: train.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/train.py b/train.py
+--- a/train.py	(revision a3acdd5451b7f3325a2a25301e811507b6b6d7b0)
++++ b/train.py	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -12,7 +12,7 @@
+     # about dataset and network
+     parser.add_argument('-project', type=str, default=PROJECT)
+     parser.add_argument('-dataset', type=str, default='cub200',
+-                        choices=['mini_imagenet', 'cub200', 'cifar100'])
++                        choices=['mini_imagenet', 'cub200', 'cifar100', 'swat'])
+     parser.add_argument('-dataroot', type=str, default=DATA_DIR)
+ 
+     # about pre-training
+Index: utils.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/utils.py b/utils.py
+--- a/utils.py	(revision a3acdd5451b7f3325a2a25301e811507b6b6d7b0)
++++ b/utils.py	(revision a8294616adaf1e0c9a72771897d02dd31432be26)
+@@ -5,6 +5,9 @@
+ 
+ import numpy as np
+ import sys
++
++from sklearn.manifold import TSNE
++
+ np.set_printoptions(threshold=sys.maxsize)
+ import pprint as pprint
+ 
+@@ -92,3 +95,33 @@
+     out.write(log_str + '\n')
+     out.flush()
+     print(log_str)
++
++
++def get_features(loader, transform, model):
++    model = model.eval()
++
++    loader.dataset.transform = transform
++    embedding_list = []
++    label_list = []
++    # data_list=[]
++    with torch.no_grad():
++        for i, batch in enumerate(loader):
++            data, label = [_.cuda() for _ in batch]
++            model.mode = 'encoder'
++            embedding = model(data)
++
++            embedding_list.append(embedding.cpu())
++            label_list.append(label.cpu())
++    embedding_list = torch.cat(embedding_list, dim=0)
++    label_list = torch.cat(label_list, dim=0)
++    np.save('embedding_list.npy', embedding_list.numpy())
++    np.save('label_list.npy', label_list.numpy())
++    return embedding_list, label_list
++
++def save_s_tne(features, labels):
++    # 创建 t-SNE 实例并拟合数据
++    tsne = TSNE(n_components=2, perplexity=50, random_state=42)
++    test_features_tsne = tsne.fit_transform(features)
++
++    np.save('features_tsne.npy', test_features_tsne)
++    np.save('label_list.npy', labels)
